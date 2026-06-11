@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 const proposalSchema = z.object({
@@ -29,6 +30,31 @@ export async function createProposal(formData: FormData) {
   }
 
   try {
+    const project = await prisma.project.findUnique({
+      where: { id: parsed.data.projectId },
+      select: { clientId: true, status: true },
+    });
+
+    if (!project || project.status !== "OPEN") {
+      return { error: "Este proyecto ya no acepta propuestas", success: false };
+    }
+
+    if (project.clientId === session.user.id) {
+      return { error: "No puedes enviar propuestas a tu propio proyecto", success: false };
+    }
+
+    const existingProposal = await prisma.proposal.findFirst({
+      where: {
+        projectId: parsed.data.projectId,
+        freelancerId: session.user.id,
+      },
+      select: { id: true },
+    });
+
+    if (existingProposal) {
+      return { error: "Ya enviaste una propuesta para este proyecto", success: false };
+    }
+
     await prisma.proposal.create({
       data: {
         message: parsed.data.message,
@@ -40,6 +66,7 @@ export async function createProposal(formData: FormData) {
 
     revalidatePath(`/projects/${parsed.data.projectId}`);
     revalidatePath("/my-proposals");
+    revalidatePath("/dashboard/proposals");
     return { success: true };
   } catch {
     return { error: "Error al enviar la propuesta", success: false };
@@ -55,4 +82,72 @@ export async function getFreelancerProposals() {
     include: { project: { select: { title: true, status: true } } },
     orderBy: { createdAt: "desc" },
   });
+}
+
+const proposalUpdateSchema = z.object({
+  message: z.string().min(10, "El mensaje debe tener al menos 10 caracteres"),
+  price: z.coerce.number().min(1, "El precio debe ser mayor a 0"),
+});
+
+export async function updateProposal(formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== "FREELANCER") {
+    return;
+  }
+
+  const proposalId = formData.get("proposalId")?.toString();
+  if (!proposalId) return;
+
+  const parsed = proposalUpdateSchema.safeParse({
+    message: formData.get("message")?.toString(),
+    price: formData.get("price")?.toString(),
+  });
+
+  if (!parsed.success) {
+    return;
+  }
+
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: proposalId },
+    select: { freelancerId: true, projectId: true, status: true },
+  });
+
+  if (!proposal || proposal.freelancerId !== session.user.id) {
+    return;
+  }
+
+  if (proposal.status !== "PENDING") {
+    return;
+  }
+
+  await prisma.proposal.update({
+    where: { id: proposalId },
+    data: parsed.data,
+  });
+
+  revalidatePath(`/projects/${proposal.projectId}`);
+  revalidatePath("/dashboard/proposals");
+  redirect("/dashboard/proposals");
+}
+
+export async function deleteProposalFromForm(formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== "FREELANCER") return;
+
+  const proposalId = formData.get("proposalId")?.toString();
+  if (!proposalId) return;
+
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: proposalId },
+    select: { freelancerId: true, projectId: true, status: true },
+  });
+
+  if (!proposal || proposal.freelancerId !== session.user.id) return;
+  if (proposal.status !== "PENDING") return;
+
+  await prisma.proposal.delete({ where: { id: proposalId } });
+
+  revalidatePath(`/projects/${proposal.projectId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/proposals");
 }

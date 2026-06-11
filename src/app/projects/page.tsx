@@ -2,6 +2,8 @@ import { getProjects } from "@/lib/actions/project.actions";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProjectsPage() {
   const projects = await getProjects();
   const session = await auth();

@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { closeProjectFromForm } from "@/lib/actions/project.actions";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -6,7 +7,12 @@ import { redirect } from "next/navigation";
 export default async function DashboardProjectsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "CLIENT") redirect("/dashboard");
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  if (currentUser?.role !== "CLIENT") redirect("/dashboard");
 
   const projects = await prisma.project.findMany({
     where: { clientId: session.user.id },
@@ -64,16 +70,37 @@ export default async function DashboardProjectsPage() {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
                   <span>
                     Creado el {new Date(project.createdAt).toLocaleDateString("es-ES")}
                   </span>
-                  <Link
-                    href={`/projects/${project.id}`}
-                    className="font-semibold text-[#1A9B5E] hover:underline"
-                  >
-                    Ver detalle
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="font-semibold text-[#1A9B5E] hover:underline"
+                    >
+                      Ver detalle
+                    </Link>
+                    {project.status === "OPEN" && (
+                      <>
+                        <Link
+                          href={`/dashboard/projects/${project.id}/edit`}
+                          className="rounded-full border border-gray-200 px-3 py-1.5 font-semibold text-gray-700 hover:bg-gray-50"
+                        >
+                          Editar
+                        </Link>
+                        <form action={closeProjectFromForm}>
+                          <input type="hidden" name="projectId" value={project.id} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-red-200 px-3 py-1.5 font-semibold text-red-600 hover:bg-red-50"
+                          >
+                            Cerrar
+                          </button>
+                        </form>
+                      </>
+                    )}
+                  </div>
                 </div>
               </article>
             ))}

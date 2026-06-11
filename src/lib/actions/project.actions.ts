@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 const projectSchema = z.object({
@@ -14,10 +15,6 @@ const projectSchema = z.object({
 
 export async function createProject(formData: FormData) {
   const session = await auth();
-
-  console.log("DEBUG SESSION:", session?.user); // Revisa esto en la terminal del VS Code
-
-  // Al usar session?.user, TypeScript sabe que si pasamos este if, user existe.
   if (session?.user?.role !== "CLIENT") {
     return { error: "No autorizado", success: false };
   }
@@ -47,6 +44,83 @@ export async function createProject(formData: FormData) {
   } catch {
     return { error: "Error al crear el proyecto", success: false };
   }
+}
+
+export async function updateProject(formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== "CLIENT") {
+    return;
+  }
+
+  const projectId = formData.get("projectId")?.toString();
+  if (!projectId) return;
+
+  const parsed = projectSchema.safeParse({
+    title: formData.get("title")?.toString(),
+    description: formData.get("description")?.toString(),
+    budget: formData.get("budget")?.toString(),
+    category: formData.get("category")?.toString(),
+  });
+
+  if (!parsed.success) {
+    return;
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true, status: true },
+  });
+
+  if (!project || project.clientId !== session.user.id) {
+    return;
+  }
+
+  if (project.status !== "OPEN") {
+    return;
+  }
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: parsed.data,
+  });
+
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/dashboard/projects");
+  redirect("/dashboard/projects");
+}
+
+export async function closeProjectFromForm(formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== "CLIENT") return;
+
+  const projectId = formData.get("projectId")?.toString();
+  if (!projectId) return;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true, status: true },
+  });
+
+  if (!project || project.clientId !== session.user.id) return;
+  if (project.status !== "OPEN") return;
+
+  await prisma.$transaction([
+    prisma.project.update({
+      where: { id: projectId },
+      data: { status: "CLOSED" },
+    }),
+    prisma.proposal.updateMany({
+      where: { projectId, status: "PENDING" },
+      data: { status: "REJECTED" },
+    }),
+  ]);
+
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/projects");
+  revalidatePath("/dashboard/contracts");
 }
 
 export async function getProjects() {

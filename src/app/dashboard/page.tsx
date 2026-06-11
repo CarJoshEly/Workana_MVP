@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { Briefcase, FileText, CheckCircle, Clock, Plus } from "lucide-react";
+import { Briefcase, FileText, CheckCircle, DollarSign, Plus } from "lucide-react";
 import { redirect } from "next/navigation";
 import { StatCard } from "./stat-card";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,37 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const isClient = session.user.role === "CLIENT";
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { name: true, role: true },
+  });
+  if (!currentUser) redirect("/login");
 
-  const [totalProjects, totalProposals] = await Promise.all([
+  const isClient = currentUser.role === "CLIENT";
+
+  const [totalProjects, totalProposals, totalContracts, completedAmount] = await Promise.all([
     isClient
       ? prisma.project.count({ where: { clientId: session.user.id } })
       : prisma.project.count({ where: { status: "OPEN" } }),
     isClient
       ? prisma.proposal.count({ where: { project: { clientId: session.user.id } } })
       : prisma.proposal.count({ where: { freelancerId: session.user.id } }),
+    isClient
+      ? prisma.contract.count({ where: { clientId: session.user.id } })
+      : prisma.contract.count({ where: { freelancerId: session.user.id } }),
+    prisma.contract.aggregate({
+      where: isClient
+        ? { clientId: session.user.id, status: "COMPLETED" }
+        : { freelancerId: session.user.id, status: "COMPLETED" },
+      _sum: { price: true },
+    }),
   ]);
+
+  const completedTotal = completedAmount._sum.price ?? 0;
+  const moneyFormatter = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
 
   const stats = [
     { 
@@ -34,15 +55,20 @@ export default async function DashboardPage() {
       icon: FileText, 
       description: `${totalProposals} registradas` 
     },
-    { title: "Contratos", value: "0", icon: CheckCircle },
-    { title: "Ingresos", value: "$0.00", icon: Clock },
+    { title: "Contratos", value: totalContracts, icon: CheckCircle },
+    {
+      title: isClient ? "Gastado" : "Ingresos",
+      value: moneyFormatter.format(completedTotal),
+      icon: DollarSign,
+      description: "Contratos completados",
+    },
   ];
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bienvenido, {session.user.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Bienvenido, {currentUser.name}</h1>
           <p className="text-gray-500">Este es el resumen de tu cuenta de {isClient ? 'Cliente' : 'Freelancer'}.</p>
         </div>
         {isClient && (

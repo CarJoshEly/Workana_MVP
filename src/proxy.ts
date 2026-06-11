@@ -14,28 +14,6 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/login", nextUrl));
   }
 
-  if (nextUrl.pathname === "/projects/create" && session?.user?.role !== "CLIENT") {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
-  }
-
-  if (nextUrl.pathname === "/my-proposals" && session?.user?.role !== "FREELANCER") {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
-  }
-
-  if (
-    ["/dashboard/projects", "/dashboard/contracts"].includes(nextUrl.pathname) &&
-    session?.user?.role !== "CLIENT"
-  ) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
-  }
-
-  if (
-    nextUrl.pathname === "/dashboard/proposals" &&
-    session?.user?.role !== "FREELANCER"
-  ) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
-  }
-
   return NextResponse.next();
 });
 

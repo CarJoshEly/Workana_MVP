@@ -2,12 +2,14 @@ import { auth, signOut } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Metadata } from "next";
+import { prisma } from "@/lib/prisma";
 import { 
   LayoutDashboard, 
   Briefcase, 
   FileText, 
   User,
-  LogOut
+  LogOut,
+  MessageCircle
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -23,7 +25,13 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const isClient = session.user.role === "CLIENT";
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { name: true, role: true, avatarUrl: true },
+  });
+  if (!currentUser) redirect("/login");
+
+  const isClient = currentUser.role === "CLIENT";
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Inicio", href: "/dashboard" },
@@ -37,6 +45,7 @@ export default async function DashboardLayout({
       label: isClient ? "Contratos" : "Mis Propuestas", 
       href: isClient ? "/dashboard/contracts" : "/dashboard/proposals" 
     },
+    { icon: MessageCircle, label: "Chat", href: "/dashboard/chat" },
     { icon: User, label: "Mi Perfil", href: "/dashboard/profile" },
   ];
 
@@ -82,12 +91,19 @@ export default async function DashboardLayout({
           
           <div className="flex items-center space-x-2 md:space-x-4 ml-auto">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-gray-900 leading-none">{session.user.name}</p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-tighter">{session.user.role}</p>
+              <p className="text-sm font-bold text-gray-900 leading-none">{currentUser.name}</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-tighter">{currentUser.role}</p>
             </div>
             <Link href="/dashboard/profile">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#1A9B5E] to-emerald-400 flex items-center justify-center text-white text-sm font-bold shadow-sm hover:opacity-90 transition">
-                {session.user.name?.[0].toUpperCase()}
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-[#1A9B5E] to-emerald-400 bg-cover bg-center text-sm font-bold text-white shadow-sm transition hover:opacity-90"
+                style={
+                  currentUser.avatarUrl
+                    ? { backgroundImage: `url(${currentUser.avatarUrl})` }
+                    : undefined
+                }
+              >
+                {!currentUser.avatarUrl && currentUser.name?.[0].toUpperCase()}
               </div>
             </Link>
           </div>

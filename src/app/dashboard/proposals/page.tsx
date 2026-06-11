@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { deleteProposalFromForm } from "@/lib/actions/proposal.actions";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -6,7 +7,12 @@ import { redirect } from "next/navigation";
 export default async function DashboardProposalsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "FREELANCER") redirect("/dashboard");
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  if (currentUser?.role !== "FREELANCER") redirect("/dashboard");
 
   const proposals = await prisma.proposal.findMany({
     where: { freelancerId: session.user.id },
@@ -18,8 +24,14 @@ export default async function DashboardProposalsPage() {
           status: true,
           budget: true,
           client: { select: { name: true } },
+          conversations: {
+            where: { freelancerId: session.user.id },
+            select: { id: true },
+            take: 1,
+          },
         },
       },
+      contract: { select: { id: true, status: true, price: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -69,18 +81,52 @@ export default async function DashboardProposalsPage() {
                     <span className="mt-2 inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
                       {proposal.status}
                     </span>
+                    {proposal.contract && (
+                      <span className="mt-2 block rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-[#1A9B5E]">
+                        Acuerdo {proposal.contract.status}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
                   <span>
                     Enviada el {new Date(proposal.createdAt).toLocaleDateString("es-ES")}
                   </span>
-                  <Link
-                    href={`/projects/${proposal.project.id}`}
-                    className="font-semibold text-[#1A9B5E] hover:underline"
-                  >
-                    Ver proyecto
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/projects/${proposal.project.id}`}
+                      className="font-semibold text-[#1A9B5E] hover:underline"
+                    >
+                      Ver proyecto
+                    </Link>
+                    {proposal.project.conversations[0] && (
+                      <Link
+                        href={`/dashboard/chat/${proposal.project.conversations[0].id}`}
+                        className="rounded-full border border-gray-200 px-3 py-1.5 font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        Chat
+                      </Link>
+                    )}
+                    {proposal.status === "PENDING" && (
+                      <>
+                        <Link
+                          href={`/dashboard/proposals/${proposal.id}/edit`}
+                          className="rounded-full border border-gray-200 px-3 py-1.5 font-semibold text-gray-700 hover:bg-gray-50"
+                        >
+                          Editar
+                        </Link>
+                        <form action={deleteProposalFromForm}>
+                          <input type="hidden" name="proposalId" value={proposal.id} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-red-200 px-3 py-1.5 font-semibold text-red-600 hover:bg-red-50"
+                          >
+                            Eliminar
+                          </button>
+                        </form>
+                      </>
+                    )}
+                  </div>
                 </div>
               </article>
             ))}
