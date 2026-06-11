@@ -15,6 +15,8 @@ const projectSchema = z.object({
 export async function createProject(formData: FormData) {
   const session = await auth();
 
+  console.log("DEBUG SESSION:", session?.user); // Revisa esto en la terminal del VS Code
+
   // Al usar session?.user, TypeScript sabe que si pasamos este if, user existe.
   if (session?.user?.role !== "CLIENT") {
     return { error: "No autorizado", success: false };
@@ -63,5 +65,15 @@ export async function getClientProjects(clientId: string) {
     where: { clientId },
     include: { _count: { select: { proposals: true } } },
     orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getProjectById(id: string) {
+  return await prisma.project.findUnique({
+    where: { id },
+    include: {
+      client: { select: { name: true } },
+      _count: { select: { proposals: true } },
+    },
   });
 }
