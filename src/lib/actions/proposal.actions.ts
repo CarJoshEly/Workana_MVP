@@ -41,7 +41,7 @@ export async function createProposal(formData: FormData) {
     revalidatePath(`/projects/${parsed.data.projectId}`);
     revalidatePath("/my-proposals");
     return { success: true };
-  } catch (error) {
+  } catch {
     return { error: "Error al enviar la propuesta", success: false };
   }
 }

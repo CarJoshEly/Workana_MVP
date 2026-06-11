@@ -1,13 +1,19 @@
 import { auth, signOut } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Metadata } from "next";
 import { 
   LayoutDashboard, 
   Briefcase, 
   FileText, 
-  MessageSquare, 
+  User,
   LogOut
 } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Dashboard | Workana MVP",
+  description: "Gestiona tus proyectos y propuestas de freelancing.",
+};
 
 export default async function DashboardLayout({
   children,
@@ -17,7 +23,7 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const isClient = (session.user as any).role === "CLIENT";
+  const isClient = session.user.role === "CLIENT";
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Inicio", href: "/dashboard" },
@@ -31,7 +37,7 @@ export default async function DashboardLayout({
       label: isClient ? "Contratos" : "Mis Propuestas", 
       href: isClient ? "/dashboard/contracts" : "/dashboard/proposals" 
     },
-    { icon: MessageSquare, label: "Mensajes", href: "/dashboard/messages" },
+    { icon: User, label: "Mi Perfil", href: "/dashboard/profile" },
   ];
 
   return (
@@ -70,12 +76,20 @@ export default async function DashboardLayout({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-end px-8">
-          <div className="flex items-center space-x-4">
-            <span className="text-sm font-medium text-gray-700">{session.user.name}</span>
-            <div className="w-8 h-8 rounded-full bg-[#1A9B5E] flex items-center justify-center text-white text-xs font-bold">
-              {session.user.name?.[0]}
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-8">
+          {/* Logo móvil */}
+          <div className="md:hidden text-[#1A9B5E] font-black text-xl">W<span className="text-gray-400">M</span></div>
+          
+          <div className="flex items-center space-x-2 md:space-x-4 ml-auto">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-bold text-gray-900 leading-none">{session.user.name}</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-tighter">{session.user.role}</p>
             </div>
+            <Link href="/dashboard/profile">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#1A9B5E] to-emerald-400 flex items-center justify-center text-white text-sm font-bold shadow-sm hover:opacity-90 transition">
+                {session.user.name?.[0].toUpperCase()}
+              </div>
+            </Link>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-8">

@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 export default async function ProjectsPage() {
   const projects = await getProjects();
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = session?.user?.role;
 
   return (
     <div className="min-h-screen bg-gray-50">
